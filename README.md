@@ -55,3 +55,19 @@ PUBLISH_TO_GITHUB.cmd                 # tự tạo repo (cần xác nhận GitHu
 ```
 
 **License:** mã gốc Concat theo AGPL-3.0-or-later; bảo toàn tác giả, LICENSE và THIRD_PARTY_NOTICES. Phần fork phải tuân thủ các nghĩa vụ giấy phép liên quan khi phân phối. Xem https://github.com/jub0t/Concat và file upstream/license tương ứng.
+
+
+## Đề xuất v5 — tab BẢN QUYỀN & AUDIO (chưa phát hành)
+
+Nhánh `feature/copyright-review-v5` thêm tab **BAN QUYEN & AUDIO** độc lập bên cạnh Biên tập video và Movie Recap AI. Tab cung cấp báo cáo JSON/CSV về các hạng mục cần kiểm tra quyền, tắt âm thanh gốc, hoặc thay bằng file nhạc đã được cấp phép trong video MP4, giữ nguyên hình ảnh gốc.
+
+**Không có công cụ né Content ID/TikTok hoặc cơ chế tự xác nhận quyền phát hành.** Chỉnh sửa âm thanh không tạo quyền sử dụng hình ảnh phim. Giấy phép/nguồn nhạc do người dùng nhập không được tự động xác thực.
+
+Dùng CLI trong bản v5:
+- Chỉ xuất báo cáo: `python runtime/cli.py rights --input video.mp4 --out out`
+- Tắt âm gốc: thêm `--mute-original`
+- Thay nhạc: thêm `--replacement-audio licensed.wav --license-note "nguon/giay phep"`
+
+Đầu ra gồm `report.json`, `bao_cao_quyen_su_dung.json`, `danh_sach_can_kiem_tra.csv`, và MP4 nếu có chỉnh sửa âm thanh. MP4 đang tồn tại sẽ không bị ghi đè.
+
+Bản v4 hiện có đã build xanh và không bị sửa. Chỉ dùng v5 sau khi pull request qua kiểm thử GitHub Actions Windows.
