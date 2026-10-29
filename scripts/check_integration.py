@@ -17,6 +17,12 @@ def check(path: Path | None):
     assert 'replacement_audio:' in ui
     assert 'replacement_audio:' in rust or 'replacement_audio' in rust
     assert '"rights".into()' in rust
+    assert 'callback browse(kind: int) -> string;' in ui
+    assert 'root.browse(1)' in ui
+    assert 'AI Model ID' in ui
+    assert 'app.on_lmk_pick' in rust
+    assert 'LMK_AI_KEY' in rust
+    assert 'callback lmk-pick(kind: int) -> string;' in patch
     assert "app.on_lmk_run" in rust
     assert "LMK-NATIVE-FORK-v4" in patch
     if path:
