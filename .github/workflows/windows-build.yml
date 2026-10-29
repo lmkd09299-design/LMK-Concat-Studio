@@ -169,16 +169,45 @@ jobs:
           # Bootstrap the Python backend on the target machine at first launch.
           # No API keys or generated assets enter the artifact.
       - name: Smoke-test staged Windows program
+        timeout-minutes: 5
         run: |
           $ErrorActionPreference = 'Stop'
-          $dir = (Resolve-Path 'dist/LMK-Concat-Studio-Windows-x64').Path
-          Push-Location $dir
-          try {
-            & '.\LMK-Concat-Studio.exe' --version
-            if ($LASTEXITCODE -ne 0) { throw 'Version smoke failed' }
-            & '.\LMK-Concat-Studio.exe' --smoke
-            if ($LASTEXITCODE -ne 0) { throw 'Launch smoke failed' }
-          } finally { Pop-Location }
+          $exe = (Resolve-Path 'dist/LMK-Concat-Studio-Windows-x64/LMK-Concat-Studio.exe').Path
+          $workDir = Split-Path $exe -Parent
+          # A Windows GUI-subsystem process may not update PowerShell's LASTEXITCODE
+          # when invoked directly. Check the Process.ExitCode after WaitForExit.
+          function Test-Launch([string]$argument, [int]$timeoutSeconds) {
+            $start = [System.Diagnostics.ProcessStartInfo]::new()
+            $start.FileName = $exe
+            $start.WorkingDirectory = $workDir
+            [void]$start.ArgumentList.Add($argument)
+            $start.UseShellExecute = $false
+            $start.RedirectStandardOutput = $true
+            $start.RedirectStandardError = $true
+            $process = [System.Diagnostics.Process]::new()
+            $process.StartInfo = $start
+            try {
+              if (-not $process.Start()) { throw "Failed to start $argument" }
+              $stdout = $process.StandardOutput.ReadToEndAsync()
+              $stderr = $process.StandardError.ReadToEndAsync()
+              if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
+                $process.Kill($true)
+                throw "Timed out running $argument"
+              }
+              $process.WaitForExit()
+              if ($stdout.Result) { Write-Host $stdout.Result }
+              if ($stderr.Result) { Write-Host "STDERR: $($stderr.Result)" }
+              $code = $process.ExitCode
+              Write-Host "$argument exit code: $code"
+              if ($code -ne 0) {
+                throw "$argument failed with process exit code $code"
+              }
+            } finally {
+              $process.Dispose()
+            }
+          }
+          Test-Launch '--version' 45
+          Test-Launch '--smoke' 180
       - name: Upload only successfully built and smoke-tested program
         uses: actions/upload-artifact@v4
         with:
