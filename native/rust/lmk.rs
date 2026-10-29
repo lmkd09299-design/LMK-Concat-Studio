@@ -71,7 +71,7 @@ fn recap_source_from_project() -> Result<(PathBuf, PathBuf, VoiceContext), Strin
         };
         let id = SystemTime::now()
             .duration_since(UNIX_EPOCH).map_or(0, |t| t.as_millis());
-        let project_path = session.path().to_owned();
+        let project_path = PathBuf::from(session.path());
         let out = project_path.join("lmk-recaps").join(format!("recap-{id}"));
         found = Ok((
             PathBuf::from(&source.path),
