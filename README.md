@@ -71,3 +71,13 @@ Dùng CLI trong bản v5:
 Đầu ra gồm `report.json`, `bao_cao_quyen_su_dung.json`, `danh_sach_can_kiem_tra.csv`, và MP4 nếu có chỉnh sửa âm thanh. MP4 đang tồn tại sẽ không bị ghi đè.
 
 Bản v4 hiện có đã build xanh và không bị sửa. Chỉ dùng v5 sau khi pull request qua kiểm thử GitHub Actions Windows.
+
+
+## Movie Recap: chọn file, chọn AI, tự cắt ghép (bản v5 PR)
+
+- Trên tab Movie Recap, nhấn **CHON** cạnh ô video để mở hộp chọn `mp4/mkv/mov`; phụ đề SRT và thư mục lưu có nút CHON riêng. Video đã nhập vào Concat Editor không tự gán cho tab Movie Recap.
+- **Whisper CPU** biến lời thoại phim thành transcript. Chọn `tiny`, `base` hoặc `small` khi không có file SRT. Phụ đề SRT có sẵn là lựa chọn nhanh hơn, tránh transcribe lại.
+- **Bat AI viet kich ban va chon canh**: bật và nhập `API URL`, `AI Model ID`, `API key` của **dịch vụ text AI tương thích OpenAI Chat Completions**. AI được gọi để viết recap và chọn timecode từ transcript; không có nhà cung cấp/model được cấp sẵn. Key chỉ truyền qua biến môi trường của tiến trình Python, không ghi xuống file cấu hình.
+- Nếu tắt AI, phần mềm dùng điểm cảnh theo lời thoại/keyword và trích xuất văn bản: **không phải AI hiểu phim**.
+- **FFmpeg** phát hiện chuyển cảnh, cắt các đoạn, ghép theo trật tự cốt truyện, tạo MP4, TXT/CSV/SRT và có thể tạo tiếng đọc qua Edge TTS. Hình ảnh không được AI nhìn hay hiểu ở phiên bản này. Cần quyền sử dụng phim và soundtrack phù hợp trước khi xuất bản.
+- **Chưa tự nhập MP4 output vào timeline Concat**, muốn chỉnh sửa tiếp thì dùng Import trong Editor. Lần đầu chạy có thể tải model Whisper trên CPU.
