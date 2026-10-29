@@ -21,11 +21,19 @@ export struct LmkRequest {
     analysis: string,
     replacement_audio: string,
     license_note: string,
+    ai_url: string,
+    ai_model: string,
+    ai_key: string,
+    asr_model: string,
+    use_ai: bool,
 }
 
 export component LmkField inherits Rectangle {
     in property <string> label;
     in-out property <string> value;
+    in property <bool> browse: false;
+    in property <bool> secret: false;
+    callback pick();
     height: 62px;
     background: transparent;
     VerticalLayout {
@@ -44,14 +52,23 @@ export component LmkField inherits Rectangle {
             TextInput {
                 x: 8px;
                 y: 5px;
-                width: parent.width - 16px;
+                width: root.browse ? parent.width - 106px : parent.width - 16px;
                 height: parent.height - 10px;
                 text <=> root.value;
+                input-type: root.secret ? InputType.password : InputType.text;
                 single-line: true;
                 color: Theme.fg;
                 font-size: Theme.fs;
                 selection-background-color: Theme.accent;
                 selection-foreground-color: Theme.on-accent;
+            }
+            if root.browse: Button {
+                x: parent.width - 86px;
+                y: 3px;
+                width: 80px;
+                height: 27px;
+                label: "CHON";
+                clicked => { root.pick(); }
             }
         }
     }
@@ -102,12 +119,18 @@ export component LmkTools inherits Rectangle {
     in property <string> job-status;
     in property <bool> busy;
     callback run-job(request: LmkRequest);
+    callback browse(kind: int) -> string;
     property <string> source-path: "";
     property <string> subtitle-path: "";
     property <string> output-path: "";
     property <string> analysis-text: "";
     property <string> replacement-path: "";
     property <string> license-note: "";
+    property <bool> use-ai: false;
+    property <string> ai-url: "";
+    property <string> ai-model: "";
+    property <string> ai-key: "";
+    property <int> asr-choice: 0;
     property <int> aspect-choice: 0;
     property <int> language-choice: 0;
     property <int> rights-choice: 0;
@@ -145,9 +168,30 @@ export component LmkTools inherits Rectangle {
             VerticalLayout {
                 padding: 12px;
                 spacing: 9px;
-                LmkField { label: "Duong dan video goc"; value <=> root.source-path; }
-                if root.page != 3: LmkField { label: "File phu de .srt (khong bat buoc)"; value <=> root.subtitle-path; }
-                LmkField { label: "Thu muc luu thanh pham"; value <=> root.output-path; }
+                LmkField {
+                    label: "Video goc (.mp4/.mkv/.mov)";
+                    value <=> root.source-path;
+                    browse: true;
+                    pick => {
+                        root.source-path = root.browse(1);
+                    }
+                }
+                if root.page != 3: LmkField {
+                    label: "Phu de .srt (khong bat buoc)";
+                    value <=> root.subtitle-path;
+                    browse: true;
+                    pick => {
+                        root.subtitle-path = root.browse(2);
+                    }
+                }
+                LmkField {
+                    label: "Thu muc luu ket qua";
+                    value <=> root.output-path;
+                    browse: true;
+                    pick => {
+                        root.output-path = root.browse(3);
+                    }
+                }
                 if root.page != 3: Text { text: "Ty le khung hinh"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
                 if root.page != 3: Select {
                     options: ["9:16 (Shorts / TikTok)", "16:9 (YouTube)", "1:1 (Square)"];
@@ -256,6 +300,51 @@ export component LmkTools inherits Rectangle {
                 }
                 if root.page == 2: VerticalLayout {
                     spacing: 8px;
+                    Rectangle { height: 1px; background: Theme.line; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: "Bat AI viet kich ban va chon canh";
+                            color: Theme.fg;
+                            horizontal-stretch: 1;
+                        }
+                        Switch {
+                            checked: root.use-ai;
+                            toggled(on) => { root.use-ai = on; }
+                        }
+                    }
+                    if root.use-ai: VerticalLayout {
+                        spacing: 6px;
+                        LmkField {
+                            label: "API URL OpenAI-compatible (HTTPS)";
+                            value <=> root.ai-url;
+                        }
+                        LmkField {
+                            label: "AI Model ID";
+                            value <=> root.ai-model;
+                        }
+                        LmkField {
+                            label: "API key - chi dung trong phien";
+                            value <=> root.ai-key;
+                            secret: true;
+                        }
+                    }
+                    if !root.use-ai: Text {
+                        text: "Chua ket noi AI: dung transcript va thuat toan chon canh. Khong tu hieu noi dung phim.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: "Whisper nhan dien loi thoai (CPU)";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                    }
+                    Select {
+                        options: ["tiny (nhanh)", "base (can bang)", "small (chinh xac hon)"];
+                        current: root.asr-choice;
+                        changed(index) => { root.asr-choice = index; }
+                    }
                     Text { text: "Thoi luong recap"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
                     Select {
                         options: ["1 phut", "3 phut", "5 phut", "8 phut", "10 phut"];
@@ -305,6 +394,11 @@ export component LmkTools inherits Rectangle {
                             analysis: root.analysis-text,
                             replacement_audio: root.page == 3 ? root.replacement-path : "",
                             license_note: root.page == 3 ? root.license-note : "",
+                            use_ai: root.page == 2 && root.use-ai,
+                            ai_url: root.page == 2 && root.use-ai ? root.ai-url : "",
+                            ai_model: root.page == 2 && root.use-ai ? root.ai-model : "",
+                            ai_key: root.page == 2 && root.use-ai ? root.ai-key : "",
+                            asr_model: root.asr-choice == 0 ? "tiny" : (root.asr-choice == 1 ? "base" : "small"),
                         });
                     }
                 }
