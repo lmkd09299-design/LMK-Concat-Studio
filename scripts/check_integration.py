@@ -22,6 +22,13 @@ def check(path: Path | None):
     assert 'AI Model ID' in ui
     assert 'app.on_lmk_pick' in rust
     assert 'LMK_AI_KEY' in rust
+    assert 'recap_source_from_project' in rust
+    assert 'studio.project().media.iter()' in rust
+    assert 'Speech::status' in rust
+    assert 'speak_with_concat' in rust
+    assert 'recap_concat_voice.mp4' in (ROOT / 'runtime/cli.py').read_text(encoding='utf-8')
+    assert 'voice_script.txt' in (ROOT / 'runtime/core/recap.py').read_text(encoding='utf-8')
+    assert 'TU DONG RECAP' in ui
     assert 'callback lmk-pick(kind: int) -> string;' in patch
     assert "app.on_lmk_run" in rust
     assert "LMK-NATIVE-FORK-v4" in patch
