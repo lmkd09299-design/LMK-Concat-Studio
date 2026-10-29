@@ -23,11 +23,13 @@ struct Job {
     mute: bool,
     minutes: i32,
     analysis: String,
+    replacement_audio: Option<PathBuf>,
+    license_note: String,
 }
 
 impl Job {
     fn validate(&self) -> Result<(), String> {
-        if self.mode != 1 && self.mode != 2 {
+        if self.mode != 1 && self.mode != 2 && self.mode != 3 {
             return Err("Unsupported LMK tab".into());
         }
         if !self.source.is_file() {
@@ -36,6 +38,14 @@ impl Job {
         if let Some(srt) = &self.subtitle {
             if !srt.is_file() {
                 return Err(format!("Subtitle file not found: {}", srt.display()));
+            }
+        }
+        if self.mode == 3 {
+            if let Some(audio) = &self.replacement_audio {
+                if !audio.is_file() { return Err(format!("Replacement audio not found: {}", audio.display())); }
+                if self.license_note.trim().is_empty() {
+                    return Err("Add an audio license/source note before using replacement audio".into());
+                }
             }
         }
         if self.output.is_file() {
@@ -70,7 +80,7 @@ impl Job {
     fn arguments(&self, runtime: &Path) -> Result<Vec<String>, String> {
         let mut args = vec![
             runtime.join("cli.py").to_string_lossy().into_owned(),
-            if self.mode == 1 { "edit".into() } else { "recap".into() },
+            if self.mode == 1 { "edit".into() } else if self.mode == 2 { "recap".into() } else { "rights".into() },
             "--input".into(), self.source.to_string_lossy().into_owned(),
             "--out".into(), self.output.to_string_lossy().into_owned(),
             "--aspect".into(), self.aspect.clone(),
@@ -96,9 +106,18 @@ impl Job {
                 args.push("--analysis-file".into());
                 args.push(file.to_string_lossy().into_owned());
             }
-        } else {
+        } else if self.mode == 2 {
             args.push("--minutes".into());
             args.push(self.minutes.clamp(1, 10).to_string());
+        } else {
+            args.extend(["--rights".into(), self.rights.clone()]);
+            if self.mute { args.push("--mute-original".into()); }
+            if let Some(audio) = &self.replacement_audio {
+                args.push("--replacement-audio".into());
+                args.push(audio.to_string_lossy().into_owned());
+                args.push("--license-note".into());
+                args.push(self.license_note.clone());
+            }
         }
         Ok(args)
     }
@@ -146,6 +165,9 @@ pub fn bind(app: &App) {
             mute: form.mute,
             minutes: form.minutes,
             analysis: form.analysis.to_string(),
+            replacement_audio: (!form.replacement_audio.trim().is_empty())
+                .then(|| PathBuf::from(form.replacement_audio.trim())),
+            license_note: form.license_note.to_string(),
         };
         if let Err(error) = job.validate() {
             if let Some(app) = weak.upgrade() { app.set_lmk_status(error.into()); }
