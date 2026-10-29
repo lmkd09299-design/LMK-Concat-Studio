@@ -50,7 +50,7 @@ def patch(source: Path):
         '    in-out property <int> lmk-page: 0;\n'
         '    in property <bool> lmk-busy: false;\n'
         '    in property <string> lmk-status: "Ready to process files you may use";\n'
-        '    callback lmk-run(request: LmkRequest);',
+        '    callback lmk-run(request: LmkRequest);\n    callback lmk-pick(kind: int) -> string;',
         'app.slint root')
     editor = '''            if !root.on-start && !root.phone: Workspace {
                 vertical-stretch: 1;
@@ -68,6 +68,7 @@ def patch(source: Path):
                     busy: root.lmk-busy;
                     job-status: root.lmk-status;
                     run-job(request) => { root.lmk-run(request); }
+                    browse(kind) => { root.lmk-pick(kind) }
                 }
             }'''
     app = replace_once(app, editor, injected, 'app.slint workspace')

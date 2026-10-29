@@ -55,3 +55,44 @@ PUBLISH_TO_GITHUB.cmd                 # tự tạo repo (cần xác nhận GitHu
 ```
 
 **License:** mã gốc Concat theo AGPL-3.0-or-later; bảo toàn tác giả, LICENSE và THIRD_PARTY_NOTICES. Phần fork phải tuân thủ các nghĩa vụ giấy phép liên quan khi phân phối. Xem https://github.com/jub0t/Concat và file upstream/license tương ứng.
+
+
+## Đề xuất v5 — tab BẢN QUYỀN & AUDIO (chưa phát hành)
+
+Nhánh `feature/copyright-review-v5` thêm tab **BAN QUYEN & AUDIO** độc lập bên cạnh Biên tập video và Movie Recap AI. Tab cung cấp báo cáo JSON/CSV về các hạng mục cần kiểm tra quyền, tắt âm thanh gốc, hoặc thay bằng file nhạc đã được cấp phép trong video MP4, giữ nguyên hình ảnh gốc.
+
+**Không có công cụ né Content ID/TikTok hoặc cơ chế tự xác nhận quyền phát hành.** Chỉnh sửa âm thanh không tạo quyền sử dụng hình ảnh phim. Giấy phép/nguồn nhạc do người dùng nhập không được tự động xác thực.
+
+Dùng CLI trong bản v5:
+- Chỉ xuất báo cáo: `python runtime/cli.py rights --input video.mp4 --out out`
+- Tắt âm gốc: thêm `--mute-original`
+- Thay nhạc: thêm `--replacement-audio licensed.wav --license-note "nguon/giay phep"`
+
+Đầu ra gồm `report.json`, `bao_cao_quyen_su_dung.json`, `danh_sach_can_kiem_tra.csv`, và MP4 nếu có chỉnh sửa âm thanh. MP4 đang tồn tại sẽ không bị ghi đè.
+
+Bản v4 hiện có đã build xanh và không bị sửa. Chỉ dùng v5 sau khi pull request qua kiểm thử GitHub Actions Windows.
+
+
+## Movie Recap: chọn file, chọn AI, tự cắt ghép (bản v5 PR)
+
+- Trên tab Movie Recap, nhấn **CHON** cạnh ô video để mở hộp chọn `mp4/mkv/mov`; phụ đề SRT và thư mục lưu có nút CHON riêng. Video đã nhập vào Concat Editor không tự gán cho tab Movie Recap.
+- **Whisper CPU** biến lời thoại phim thành transcript. Chọn `tiny`, `base` hoặc `small` khi không có file SRT. Phụ đề SRT có sẵn là lựa chọn nhanh hơn, tránh transcribe lại.
+- **Bat AI viet kich ban va chon canh**: bật và nhập `API URL`, `AI Model ID`, `API key` của **dịch vụ text AI tương thích OpenAI Chat Completions**. AI được gọi để viết recap và chọn timecode từ transcript; không có nhà cung cấp/model được cấp sẵn. Key chỉ truyền qua biến môi trường của tiến trình Python, không ghi xuống file cấu hình.
+- Nếu tắt AI, phần mềm dùng điểm cảnh theo lời thoại/keyword và trích xuất văn bản: **không phải AI hiểu phim**.
+- **FFmpeg** phát hiện chuyển cảnh, cắt các đoạn, ghép theo trật tự cốt truyện, tạo MP4, TXT/CSV/SRT và có thể tạo tiếng đọc qua Edge TTS. Hình ảnh không được AI nhìn hay hiểu ở phiên bản này. Cần quyền sử dụng phim và soundtrack phù hợp trước khi xuất bản.
+- **Chưa tự nhập MP4 output vào timeline Concat**, muốn chỉnh sửa tiếp thì dùng Import trong Editor. Lần đầu chạy có thể tải model Whisper trên CPU.
+
+
+## LMK Concat Studio v6 — Automatic One-Import Recap (proposal / CI validation)
+
+**Workflow:** Create/Open Concat project → Import 1 movie in the native **CONCAT EDITOR** media bin → go to **MOVIE RECAP AI** → click **TU DONG RECAP**. No second file path and no output-folder prompt. If multiple videos are imported, select exactly one movie tile before starting. The existing project and source timeline are left untouched.
+
+- Native Rust bridge resolves the already-imported media source from the active Concat project and creates an isolated `lmk-recaps/recap-<timestamp>` output inside it.
+- Local CPU Whisper transcribes movie speech; FFmpeg detects scene cuts and creates a condensed MP4 automatically, plus `kich_ban.txt`, `scene_plan.json`, `canh_chon.csv`, `loi_binh.srt`, and `voice_script.txt`.
+- Real AI-authored scripts require a configured **OpenAI-compatible text model** (for example, an independently obtained provider API). Enter URL/model/key in AI controls or configure `LMK_AI_BASE_URL`, `LMK_AI_MODEL`, `LMK_AI_KEY` in the launch environment once; no API keys are committed to the repo. When AI is explicitly switched off, the system uses transcript heuristics and labels that mode honestly.
+- For **English** recap narration, uses Concat's existing native **Kokoro/Pocket** TTS model (last suitable selected voice; defaults to Kokoro `af_heart`). If no suitable model is installed, automatically downloads the supported compact Kokoro voice model on first use, then synthesizes WAV and mixes it with the recap automatically. A saved/sample-clone requiring a reference recording is not auto-selected. Download and CPU processing may be substantial.
+- For Vietnamese/Thai recap, Concat's built-in TTS model does **not** reliably support those languages; the existing locale-specific Edge TTS is used instead. The English voice is not applied blindly to Vietnamese or Thai.
+- On completion, the finished MP4 is automatically imported back to the **Concat media bin**. The source timeline is not replaced. The recap MP4 is ready to preview/export or edit further; it does **not** automatically construct a native editable multi-track timeline out of every clip.
+- Even when automated, visual plot understanding remains limited to video scene boundaries and transcript. The tool cannot independently certify publishing rights for the source movie or music.
+
+**Testing status:** implementation pushed to PR #1, awaiting completed Windows Rust/Slint build and smoke test. Do not download pre-release source as a functioning v6 installer until CI passes.

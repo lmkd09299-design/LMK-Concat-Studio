@@ -19,11 +19,21 @@ export struct LmkRequest {
     mute: bool,
     minutes: int,
     analysis: string,
+    replacement_audio: string,
+    license_note: string,
+    ai_url: string,
+    ai_model: string,
+    ai_key: string,
+    asr_model: string,
+    use_ai: bool,
 }
 
 export component LmkField inherits Rectangle {
     in property <string> label;
     in-out property <string> value;
+    in property <bool> browse: false;
+    in property <bool> secret: false;
+    callback pick();
     height: 62px;
     background: transparent;
     VerticalLayout {
@@ -42,14 +52,23 @@ export component LmkField inherits Rectangle {
             TextInput {
                 x: 8px;
                 y: 5px;
-                width: parent.width - 16px;
+                width: root.browse ? parent.width - 106px : parent.width - 16px;
                 height: parent.height - 10px;
                 text <=> root.value;
+                input-type: root.secret ? InputType.password : InputType.text;
                 single-line: true;
                 color: Theme.fg;
                 font-size: Theme.fs;
                 selection-background-color: Theme.accent;
                 selection-foreground-color: Theme.on-accent;
+            }
+            if root.browse: Button {
+                x: parent.width - 86px;
+                y: 3px;
+                width: 80px;
+                height: 27px;
+                label: "CHON";
+                clicked => { root.pick(); }
             }
         }
     }
@@ -75,7 +94,7 @@ export component LmkNav inherits Rectangle {
             clicked => { root.select(0); }
         }
         Button {
-            label: "BIEN TAP & QUYEN SU DUNG";
+            label: "BIEN TAP VIDEO";
             primary: root.active == 1;
             ghost: root.active != 1;
             clicked => { root.select(1); }
@@ -86,6 +105,12 @@ export component LmkNav inherits Rectangle {
             ghost: root.active != 2;
             clicked => { root.select(2); }
         }
+        Button {
+            label: "BAN QUYEN & AUDIO";
+            primary: root.active == 3;
+            ghost: root.active != 3;
+            clicked => { root.select(3); }
+        }
     }
 }
 
@@ -94,10 +119,18 @@ export component LmkTools inherits Rectangle {
     in property <string> job-status;
     in property <bool> busy;
     callback run-job(request: LmkRequest);
+    callback browse(kind: int) -> string;
     property <string> source-path: "";
     property <string> subtitle-path: "";
     property <string> output-path: "";
     property <string> analysis-text: "";
+    property <string> replacement-path: "";
+    property <string> license-note: "";
+    property <bool> use-ai: true;
+    property <string> ai-url: "";
+    property <string> ai-model: "";
+    property <string> ai-key: "";
+    property <int> asr-choice: 0;
     property <int> aspect-choice: 0;
     property <int> language-choice: 0;
     property <int> rights-choice: 0;
@@ -118,13 +151,13 @@ export component LmkTools inherits Rectangle {
                 padding: 12px;
                 spacing: 4px;
                 Text {
-                    text: root.page == 1 ? "VIDEO TRANSFORM & RIGHTS" : "MOVIE RECAP FACTORY";
+                    text: root.page == 1 ? "VIDEO EDITOR" : (root.page == 2 ? "MOVIE RECAP FACTORY" : "COPYRIGHT REVIEW & AUDIO");
                     color: Theme.fg;
                     font-weight: 700;
                     font-size: Theme.fs-lg;
                 }
                 Text {
-                    text: root.page == 1 ? "Dich, long tieng, bien tap, ra soat nguon" : "Phan tich phim, chon canh, ghep & thuyet minh";
+                    text: root.page == 1 ? "Dich, long tieng, bien tap video" : (root.page == 2 ? "Phan tich phim, chon canh, ghep & thuyet minh" : "Rao soat quyen, tat / thay am thanh da cap phep");
                     color: Theme.fg-muted;
                     font-size: Theme.fs-sm;
                 }
@@ -135,31 +168,127 @@ export component LmkTools inherits Rectangle {
             VerticalLayout {
                 padding: 12px;
                 spacing: 9px;
-                LmkField { label: "Duong dan video goc"; value <=> root.source-path; }
-                LmkField { label: "File phu de .srt (khong bat buoc)"; value <=> root.subtitle-path; }
-                LmkField { label: "Thu muc luu thanh pham"; value <=> root.output-path; }
-                Text { text: "Ty le khung hinh"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
-                Select {
+                if root.page != 2: LmkField {
+                    label: "Video goc (.mp4/.mkv/.mov)";
+                    value <=> root.source-path;
+                    browse: true;
+                    pick => {
+                        root.source-path = root.browse(1);
+                    }
+                }
+                if root.page == 1: LmkField {
+                    label: "Phu de .srt (khong bat buoc)";
+                    value <=> root.subtitle-path;
+                    browse: true;
+                    pick => {
+                        root.subtitle-path = root.browse(2);
+                    }
+                }
+                if root.page != 2: LmkField {
+                    label: "Thu muc luu ket qua";
+                    value <=> root.output-path;
+                    browse: true;
+                    pick => {
+                        root.output-path = root.browse(3);
+                    }
+                }
+                if root.page == 2: VerticalLayout {
+                    spacing: 7px;
+                    Text {
+                        text: "TU DONG 100% SAU KHI CHON VIDEO";
+                        color: Theme.accent;
+                        font-weight: 700;
+                        font-size: Theme.fs;
+                    }
+                    Text {
+                        text: "1. Nhap video vao CONCAT EDITOR o ben trai. Neu co nhieu video, click chon 1 video. 2. Bam TU DONG RECAP. Khong can nhap duong dan hay thu muc.";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: "Tu tao thu muc ket qua trong project Concat; tu nhan dien thoai, viet script, cat ghep, tao voice va nhap video thanh pham vao kho media.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                }
+                if root.page != 3: Text { text: "Ty le khung hinh"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
+                if root.page != 3: Select {
                     options: ["9:16 (Shorts / TikTok)", "16:9 (YouTube)", "1:1 (Square)"];
                     current: root.aspect-choice;
                     changed(index) => { root.aspect-choice = index; }
                 }
-                Text { text: "Ngon ngu / kich ban"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
-                Select {
+                if root.page != 3: Text { text: "Ngon ngu / kich ban"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
+                if root.page != 3: Select {
                     options: root.page == 1
                         ? ["Giu nguyen", "Tieng Viet", "English", "Thai"]
-                        : ["Tieng Viet", "English", "Thai"];
+                        : ["English (Concat voice)", "Tieng Viet (Edge voice)", "Thai (Edge voice)"];
                     current: root.language-choice;
                     changed(index) => { root.language-choice = index; }
                 }
-                if root.page == 1: VerticalLayout {
-                    spacing: 8px;
-                    Text { text: "Tinh trang quyen su dung"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
+                if root.page == 1 || root.page == 3: VerticalLayout {
+                    spacing: 6px;
+                    Text { text: "Tinh trang quyen su dung (do ban xac nhan)"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
                     Select {
                         options: ["Chua xac minh", "Tu quay / tu so huu", "Duoc cap phep", "Public domain / CC phu hop"];
                         current: root.rights-choice;
                         changed(index) => { root.rights-choice = index; }
                     }
+                }
+                if root.page == 3: VerticalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: "Khong co cong cu nao cam ket ne Content ID / ban quyen; tab nay tao bao cao va bien tap hop le.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    LmkField {
+                        label: "Duong dan am thanh THAY THE (khong bat buoc)";
+                        value <=> root.replacement-path;
+                    }
+                    Text {
+                        text: "Bang chung / ghi chu giay phep cho am thanh thay the";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                    }
+                    Rectangle {
+                        height: 78px;
+                        background: Theme.field;
+                        border-width: 1px;
+                        border-color: Theme.line;
+                        border-radius: Theme.r-sm;
+                        TextInput {
+                            x: 9px; y: 7px;
+                            width: parent.width - 18px;
+                            height: parent.height - 14px;
+                            text <=> root.license-note;
+                            color: Theme.fg;
+                            single-line: false;
+                            wrap: word-wrap;
+                            selection-background-color: Theme.accent;
+                            selection-foreground-color: Theme.on-accent;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: "Loai bo hoan toan am thanh goc";
+                            color: Theme.fg;
+                            horizontal-stretch: 1;
+                        }
+                        Switch { checked: root.mute-original; toggled(on) => { root.mute-original = on; } }
+                    }
+                    Text {
+                        text: "Khong chon am thanh / tat am: chi xuat bao cao quyen. Co thay doi: tao MP4.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                }
+                if root.page == 1: VerticalLayout {
+                    spacing: 8px;
                     HorizontalLayout {
                         spacing: 8px;
                         Text { text: "Burn phu de len video"; color: Theme.fg; horizontal-stretch: 1; }
@@ -192,6 +321,51 @@ export component LmkTools inherits Rectangle {
                 }
                 if root.page == 2: VerticalLayout {
                     spacing: 8px;
+                    Rectangle { height: 1px; background: Theme.line; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: "AI viet kich ban va chon canh";
+                            color: Theme.fg;
+                            horizontal-stretch: 1;
+                        }
+                        Switch {
+                            checked: root.use-ai;
+                            toggled(on) => { root.use-ai = on; }
+                        }
+                    }
+                    if root.use-ai: VerticalLayout {
+                        spacing: 6px;
+                        LmkField {
+                            label: "API URL OpenAI-compatible (HTTPS)";
+                            value <=> root.ai-url;
+                        }
+                        LmkField {
+                            label: "AI Model ID";
+                            value <=> root.ai-model;
+                        }
+                        LmkField {
+                            label: "API key - chi dung trong phien";
+                            value <=> root.ai-key;
+                            secret: true;
+                        }
+                    }
+                    if !root.use-ai: Text {
+                        text: "Che do fallback: chi chon canh theo phu de/tu khoa, KHONG phai AI viet kich ban.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: "Whisper nhan dien loi thoai (CPU)";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                    }
+                    Select {
+                        options: ["tiny (nhanh)", "base (can bang)", "small (chinh xac hon)"];
+                        current: root.asr-choice;
+                        changed(index) => { root.asr-choice = index; }
+                    }
                     Text { text: "Thoi luong recap"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
                     Select {
                         options: ["1 phut", "3 phut", "5 phut", "8 phut", "10 phut"];
@@ -205,7 +379,7 @@ export component LmkTools inherits Rectangle {
                         wrap: word-wrap;
                     }
                 }
-                HorizontalLayout {
+                if root.page == 1: HorizontalLayout {
                     spacing: 8px;
                     Text { text: "Tao giong doc / long tieng"; color: Theme.fg; horizontal-stretch: 1; }
                     Switch { checked: root.dubbing; toggled(on) => { root.dubbing = on; } }
@@ -221,8 +395,8 @@ export component LmkTools inherits Rectangle {
                     block: true;
                     primary: true;
                     large: true;
-                    label: root.busy ? "DANG XU LY..." : (root.page == 1 ? "XUAT VIDEO" : "TAO MOVIE RECAP");
-                    enabled: !root.busy && root.source-path != "" && root.output-path != "";
+                    label: root.busy ? "DANG XU LY..." : (root.page == 1 ? "XUAT VIDEO" : (root.page == 2 ? "TU DONG RECAP" : "RA SOAT / XUAT VIDEO"));
+                    enabled: !root.busy && (root.page == 2 || (root.source-path != "" && root.output-path != ""));
                     clicked => {
                         root.run-job({
                             mode: root.page,
@@ -232,19 +406,26 @@ export component LmkTools inherits Rectangle {
                             aspect: root.aspect-choice == 0 ? "9:16" : (root.aspect-choice == 1 ? "16:9" : "1:1"),
                             language: root.page == 1
                                 ? (root.language-choice == 0 ? "Giữ nguyên" : (root.language-choice == 1 ? "Tiếng Việt" : (root.language-choice == 2 ? "English" : "Thai")))
-                                : (root.language-choice == 0 ? "Tiếng Việt" : (root.language-choice == 1 ? "English" : "Thai")),
+                                : (root.language-choice == 0 ? "English" : (root.language-choice == 1 ? "Tiếng Việt" : "Thai")),
                             rights: root.rights-choice == 0 ? "Chưa xác minh" : (root.rights-choice == 1 ? "Tự quay / tự sở hữu" : (root.rights-choice == 2 ? "Được cấp phép" : "Public domain / CC phù hợp")),
-                            voice: root.dubbing,
+                            voice: root.page == 2 ? true : root.dubbing,
                             burn: root.burn-subs,
                             mute: root.mute-original,
                             minutes: root.minutes-choice == 0 ? 1 : (root.minutes-choice == 1 ? 3 : (root.minutes-choice == 2 ? 5 : (root.minutes-choice == 3 ? 8 : 10))),
                             analysis: root.analysis-text,
+                            replacement_audio: root.page == 3 ? root.replacement-path : "",
+                            license_note: root.page == 3 ? root.license-note : "",
+                            use_ai: root.page == 2 && root.use-ai,
+                            ai_url: root.page == 2 && root.use-ai ? root.ai-url : "",
+                            ai_model: root.page == 2 && root.use-ai ? root.ai-model : "",
+                            ai_key: root.page == 2 && root.use-ai ? root.ai-key : "",
+                            asr_model: root.asr-choice == 0 ? "tiny" : (root.asr-choice == 1 ? "base" : "small"),
                         });
                     }
                 }
                 Text {
-                    text: "Dich, crop, loc mau hay them voice khong tu dong cap quyen phat hanh."
-                        + " Kiem tra quyen su dung truoc khi dang.";
+                    text: "Chinh sua, dich, long tieng hay thay nhac khong tu tao quyen su dung."
+                        + " Kiem tra giay phep truoc khi dang.";
                     color: Theme.fg-dim;
                     font-size: Theme.fs-xs;
                     wrap: word-wrap;
