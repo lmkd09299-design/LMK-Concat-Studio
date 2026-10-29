@@ -1,0 +1,24 @@
+# Do not publish API keys, local virtual environments, build outputs or exported videos.
+.git/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.env
+.env
+.env.*
+!.env.example
+runtime/.venv/
+runtime/output/
+runtime/projects/
+.cache/
+upstream/
+vendor/
+dist/
+target/
+*.log
+*.mp4
+!runtime/fixtures/sample.mp4
+*.mov
+*.mkv
+*.exe
+*.dll

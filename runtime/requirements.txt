@@ -1,0 +1,5 @@
+# GUI, FFmpeg processing, SRT and offline heuristic planning use Python standard library.
+# Optional transcription (CPU; first use downloads speech model):
+faster-whisper>=1.1,<2
+# Optional online voice-over (Edge service requires connectivity):
+edge-tts>=7,<9

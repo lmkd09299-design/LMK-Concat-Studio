@@ -1,0 +1,190 @@
+name: LMK Concat Studio — Windows build and checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  ORT_VERSION: '1.28.0'
+  GGML_NATIVE: 'OFF'
+  GGML_BACKEND_DL: 'ON'
+  GGML_CPU_ALL_VARIANTS: 'ON'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate LMK source and backend
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests — patch and video engine
+        run: |
+          python -m unittest discover -s tests -v
+          python -m unittest discover -s runtime/tests -v
+      - name: Syntax and integration guard
+        run: |
+          python -m compileall -q apply_fork.py runtime
+          python scripts/check_integration.py
+
+  build-windows:
+    name: Build, smoke-test, package Windows x64
+    needs: validate
+    runs-on: windows-2022
+    timeout-minutes: 190
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout LMK patch sources
+        uses: actions/checkout@v4
+      - name: Checkout pinned Concat source
+        uses: actions/checkout@v4
+        with:
+          repository: jub0t/Concat
+          ref: f0c0169628c61de7311f7fc15ee5be82dd611d2e
+          path: upstream
+          persist-credentials: false
+      - name: Install pinned Rust compiler
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.93.1'
+          targets: x86_64-pc-windows-msvc
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply native Slint and Rust integrations
+        run: |
+          python apply_fork.py --source upstream
+          python scripts/check_integration.py --patched upstream
+      - name: FFmpeg SDK and LLVM — verified upstream pins
+        working-directory: upstream
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bash = "$env:ProgramFiles\Git\bin\bash.exe"
+          & $bash scripts/ci/fetch.sh 'llvm-win64' llvm.exe
+          if ($LASTEXITCODE -ne 0) { throw 'LLVM download failed' }
+          Start-Process -Wait -FilePath .\llvm.exe -ArgumentList '/S', '/D=C:\llvm'
+          if (-not (Test-Path 'C:\llvm\bin\libclang.dll')) { throw 'libclang.dll not found' }
+          'LIBCLANG_PATH=C:\llvm\bin' | Out-File $env:GITHUB_ENV -Append
+          'C:\llvm\bin' | Out-File $env:GITHUB_PATH -Append
+          & $bash scripts/ci/fetch.sh 'ffmpeg-win64' ffmpeg-win.zip
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg SDK download failed' }
+          Expand-Archive ffmpeg-win.zip -DestinationPath ffdl -Force
+          $dir = (Get-ChildItem ffdl -Directory | Select-Object -First 1).FullName
+          if (-not (Test-Path "$dir\include") -or -not (Test-Path "$dir\lib")) { throw 'FFmpeg SDK incomplete' }
+          "FFMPEG_DIR=$dir" | Out-File $env:GITHUB_ENV -Append
+          "$dir\bin" | Out-File $env:GITHUB_PATH -Append
+      - name: ONNX Runtime — verified upstream pin
+        working-directory: upstream
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bash = "$env:ProgramFiles\Git\bin\bash.exe"
+          & $bash scripts/ci/fetch.sh 'onnxruntime-win-x64' onnxruntime.zip
+          if ($LASTEXITCODE -ne 0) { throw 'ONNX Runtime download failed' }
+          Expand-Archive onnxruntime.zip -DestinationPath . -Force
+          $dir = "$PWD\onnxruntime-win-x64-$env:ORT_VERSION"
+          if (-not (Test-Path "$dir\lib\onnxruntime.lib")) { throw 'ONNX library not found' }
+          'ORT_PREFER_DYNAMIC_LINK=1' | Out-File $env:GITHUB_ENV -Append
+          "ORT_LIB_LOCATION=$dir\lib" | Out-File $env:GITHUB_ENV -Append
+          "ORT_DIR=$dir" | Out-File $env:GITHUB_ENV -Append
+          "$dir\lib" | Out-File $env:GITHUB_PATH -Append
+      - name: sherpa-onnx — isolate import libraries from DLLs
+        working-directory: upstream
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Select-String -Path src\Cargo.lock -Pattern 'name = "sherpa-onnx-sys"' -Context 0,1).Context.PostContext[0] -replace '.*"(.*)".*', '$1'
+          $name = 'sherpa-onnx-win-x64-shared-MT-Release-lib'
+          $stem = "sherpa-onnx-v$version-win-x64-shared-MT-Release-lib"
+          $bash = "$env:ProgramFiles\Git\bin\bash.exe"
+          $url = & $bash scripts/ci/fetch.sh --url $name
+          if ($url -notmatch "/v$([regex]::Escape($version))/") { throw 'sherpa version does not match upstream lock' }
+          & $bash scripts/ci/fetch.sh $name sherpa.tar.bz2
+          if ($LASTEXITCODE -ne 0) { throw 'sherpa download failed' }
+          python -c "import tarfile; tarfile.open('sherpa.tar.bz2').extractall(filter='data')"
+          if (-not (Test-Path "$stem\lib")) { throw 'sherpa lib directory missing' }
+          New-Item -ItemType Directory -Force sherpa-libs, sherpa-dlls | Out-Null
+          Copy-Item "$stem\lib\sherpa-onnx-*.lib" sherpa-libs\
+          Copy-Item "$stem\lib\sherpa-onnx-*.dll" sherpa-dlls\
+          "SHERPA_ONNX_LIB_DIR=$PWD\sherpa-libs" | Out-File $env:GITHUB_ENV -Append
+          "SHERPA_DLL_DIR=$PWD\sherpa-dlls" | Out-File $env:GITHUB_ENV -Append
+      - name: Rust dependency cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: upstream/src
+          key: win-x64-release-v4
+      - name: Compile native Windows application
+        working-directory: upstream/src
+        timeout-minutes: 90
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build --release -p concat --target x86_64-pc-windows-msvc 2>&1 | tee build.log
+      - name: Show last compiler errors in Actions summary
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f upstream/src/build.log ]; then
+            {
+              echo '### Windows build failed (last 130 lines)'
+              echo '```text'
+              tail -n 130 upstream/src/build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Stage binary and runtime libraries
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = 'dist/LMK-Concat-Studio-Windows-x64'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $exe = 'upstream/src/target/x86_64-pc-windows-msvc/release/concat.exe'
+          if (-not (Test-Path $exe)) { throw 'Missing compiled exe' }
+          Copy-Item $exe "$out/LMK-Concat-Studio.exe"
+          Copy-Item "$env:FFMPEG_DIR\bin\*.dll" $out
+          Copy-Item "$env:FFMPEG_DIR\bin\ffmpeg.exe", "$env:FFMPEG_DIR\bin\ffprobe.exe" $out
+          Copy-Item "$env:SHERPA_DLL_DIR\*.dll" $out
+          Copy-Item "$env:ORT_DIR\lib\*.dll" $out
+          $ggml = Get-ChildItem 'upstream/src/target/x86_64-pc-windows-msvc/release/build/whisper-rs-sys-*/out/bin/ggml-cpu-x64.dll' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $ggml) { throw 'Whisper runtime DLLs missing; do not publish incomplete build' }
+          Copy-Item "$($ggml.DirectoryName)/whisper.dll", "$($ggml.DirectoryName)/ggml*.dll" $out
+          Copy-Item 'upstream/LICENSE','upstream/THIRD_PARTY_NOTICES.md' $out
+          Copy-Item 'runtime' "$out/runtime" -Recurse
+          Copy-Item 'scripts/START_LMK.cmd' "$out/START_LMK.cmd"
+          Copy-Item 'README.md' "$out/README-LMK.md"
+          # Bootstrap the Python backend on the target machine at first launch.
+          # No API keys or generated assets enter the artifact.
+      - name: Smoke-test staged Windows program
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = (Resolve-Path 'dist/LMK-Concat-Studio-Windows-x64').Path
+          Push-Location $dir
+          try {
+            & '.\LMK-Concat-Studio.exe' --version
+            if ($LASTEXITCODE -ne 0) { throw 'Version smoke failed' }
+            & '.\LMK-Concat-Studio.exe' --smoke
+            if ($LASTEXITCODE -ne 0) { throw 'Launch smoke failed' }
+          } finally { Pop-Location }
+      - name: Upload only successfully built and smoke-tested program
+        uses: actions/upload-artifact@v4
+        with:
+          name: LMK-Concat-Studio-Windows-x64
+          path: dist/LMK-Concat-Studio-Windows-x64/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload failure log for diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LMK-Windows-Build-Log
+          path: upstream/src/build.log
+          if-no-files-found: ignore
+          retention-days: 7
