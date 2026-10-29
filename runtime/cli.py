@@ -1,6 +1,7 @@
 """Scriptable interface. Example: python cli.py recap --input movie.mp4 --srt movie.srt --out output"""
 import argparse,json,sys,os
 from core.ai import AISettings
+from core.oxion_keys import is_oxion, load as load_oxion_key, store as save_oxion_key
 from core.editor import build_edited_video
 from core.recap import build_recap
 from core.rights import audit_and_transform
@@ -24,6 +25,7 @@ def main():
     p.add_argument('--threshold',type=float,default=.30)
     p.add_argument('--voice-file',default='')
     p.add_argument('--no-ai',action='store_true')
+    p.add_argument('--remember-oxion-key',action='store_true',help='Encrypt entered Oxion API key for this Windows user')
     p.add_argument('--replacement-audio',default='')
     p.add_argument('--license-note',default='')
     a=p.parse_args()
@@ -35,7 +37,17 @@ def main():
             'Thai': 'th-TH-PremwadeeNeural',
             'Tiếng Việt': 'vi-VN-HoaiMyNeural',
         }.get(a.language, a.voice_name)
-    ai=AISettings() if a.no_ai else AISettings(a.api_url,a.api_model,os.environ.get(a.api_key_env,''))
+    key = os.environ.get(a.api_key_env,'')
+    try:
+        if a.mode == 'recap' and not a.no_ai and is_oxion(a.api_url):
+            if key and a.remember_oxion_key:
+                save_oxion_key(key)
+            if not key:
+                key = load_oxion_key()
+        ai=AISettings() if a.no_ai else AISettings(a.api_url,a.api_model,key)
+    except MediaError as e:
+        print('FAILED:', e, file=sys.stderr)
+        return 2
     try:
         if a.mode == 'mix':
             if not a.voice_file:
