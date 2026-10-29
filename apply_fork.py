@@ -67,7 +67,8 @@ def patch(source: Path):
                     page: root.lmk-page;
                     busy: root.lmk-busy;
                     job-status: root.lmk-status;
-                    run-job(request) => { root.lmk-run(request); }\n                    browse(kind) => { root.lmk-pick(kind) }
+                    run-job(request) => { root.lmk-run(request); }
+                    browse(kind) => { root.lmk-pick(kind) }
                 }
             }'''
     app = replace_once(app, editor, injected, 'app.slint workspace')
