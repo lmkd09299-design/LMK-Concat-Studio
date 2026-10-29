@@ -12,6 +12,11 @@ def check(path: Path | None):
     assert 'import { ScrollView } from "std-widgets.slint";' in ui, "Missing Slint ScrollView import"
     assert 'ScrollView {' in ui
     assert "callback run-job(request: LmkRequest);" in ui
+    assert 'label: "BAN QUYEN & AUDIO";' in ui
+    assert 'root.active == 3' in ui
+    assert 'replacement_audio:' in ui
+    assert 'replacement_audio:' in rust or 'replacement_audio' in rust
+    assert '"rights".into()' in rust
     assert "app.on_lmk_run" in rust
     assert "LMK-NATIVE-FORK-v4" in patch
     if path:
