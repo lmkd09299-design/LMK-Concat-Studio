@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.oxion_keys import is_oxion, store, load, clear
+from core.oxion_keys import is_oxion, store, load, clear, verify_model_access
 from core.media import MediaError
 
 
@@ -19,6 +19,28 @@ class OxionTests(unittest.TestCase):
         self.assertFalse(is_oxion("http://oxionai.com/v1"))
         self.assertFalse(is_oxion("https://oxionai.com.attacker.tld/v1"))
         self.assertFalse(is_oxion("https://other.example/v1"))
+
+    def test_api_preflight_does_not_send_video_or_publish_key(self):
+        import io
+        import json
+        from unittest.mock import patch
+
+        class Response(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+
+        def fake_urlopen(req, timeout):
+            self.assertEqual(req.full_url, "https://www.oxionai.com/v1/models/deepseek-v4-flash-0731")
+            self.assertEqual(req.get_header("Authorization"), "Bearer cc_test_only")
+            self.assertEqual(timeout, 15)
+            return Response(json.dumps({"id": "deepseek-v4-flash-0731"}).encode("utf-8"))
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            verify_model_access("https://www.oxionai.com/v1", "deepseek-v4-flash-0731", "cc_test_only")
+
+    def test_missing_key_is_rejected_before_network(self):
+        with self.assertRaises(MediaError):
+            verify_model_access("https://www.oxionai.com/v1", "deepseek-v4-flash-0731", "")
 
     def test_empty_key_refused(self):
         with self.assertRaises(MediaError):
