@@ -25,6 +25,11 @@ struct Job {
     analysis: String,
     replacement_audio: Option<PathBuf>,
     license_note: String,
+    use_ai: bool,
+    ai_url: String,
+    ai_model: String,
+    ai_key: String,
+    asr_model: String,
 }
 
 impl Job {
@@ -38,6 +43,16 @@ impl Job {
         if let Some(srt) = &self.subtitle {
             if !srt.is_file() {
                 return Err(format!("Subtitle file not found: {}", srt.display()));
+            }
+        }
+        if self.mode == 2 && self.use_ai {
+            if self.ai_url.trim().is_empty() || self.ai_model.trim().is_empty() {
+                return Err("AI mode requires API URL and model ID".into());
+            }
+            if !(self.ai_url.starts_with("https://") ||
+                self.ai_url.starts_with("http://127.0.0.1:") ||
+                self.ai_url.starts_with("http://localhost:")) {
+                return Err("API URL must be HTTPS except localhost".into());
             }
         }
         if self.mode == 3 {
@@ -85,6 +100,7 @@ impl Job {
             "--out".into(), self.output.to_string_lossy().into_owned(),
             "--aspect".into(), self.aspect.clone(),
             "--language".into(), self.language.clone(),
+            "--model".into(), self.asr_model.clone(),
         ];
         if let Some(srt) = &self.subtitle {
             args.push("--srt".into());
@@ -107,6 +123,12 @@ impl Job {
                 args.push(file.to_string_lossy().into_owned());
             }
         } else if self.mode == 2 {
+            if self.use_ai {
+                args.extend([
+                    "--api-url".into(), self.ai_url.clone(),
+                    "--api-model".into(), self.ai_model.clone(),
+                ]);
+            }
             args.push("--minutes".into());
             args.push(self.minutes.clamp(1, 10).to_string());
         } else {
@@ -127,8 +149,12 @@ impl Job {
         let runtime = Self::runtime_dir()?;
         let args = self.arguments(&runtime)?;
         let python = Self::python(&runtime);
-        let result = Command::new(&python)
-            .args(&args)
+        let mut cmd = Command::new(&python);
+        cmd.args(&args);
+        if self.mode == 2 && self.use_ai && !self.ai_key.is_empty() {
+            cmd.env("LMK_AI_KEY", &self.ai_key);
+        }
+        let result = cmd
             .current_dir(runtime)
             .stdin(Stdio::null())
             .output()
@@ -150,6 +176,20 @@ impl Job {
 }
 
 pub fn bind(app: &App) {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    app.on_lmk_pick(|kind| {
+        let picked = match kind {
+            1 => rfd::FileDialog::new()
+                .add_filter("Video files", &["mp4", "mkv", "mov", "webm", "avi"])
+                .pick_file(),
+            2 => rfd::FileDialog::new().add_filter("Subtitles", &["srt"]).pick_file(),
+            3 => rfd::FileDialog::new().pick_folder(),
+            _ => None,
+        };
+        picked.map(|p| p.to_string_lossy().to_string()).unwrap_or_default().into()
+    });
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    app.on_lmk_pick(|_| "".into());
     let weak = app.as_weak();
     app.on_lmk_run(move |form| {
         let job = Job {
@@ -168,6 +208,11 @@ pub fn bind(app: &App) {
             replacement_audio: (!form.replacement_audio.trim().is_empty())
                 .then(|| PathBuf::from(form.replacement_audio.trim())),
             license_note: form.license_note.to_string(),
+            use_ai: form.use_ai,
+            ai_url: form.ai_url.to_string(),
+            ai_model: form.ai_model.to_string(),
+            ai_key: form.ai_key.to_string(),
+            asr_model: form.asr_model.to_string(),
         };
         if let Err(error) = job.validate() {
             if let Some(app) = weak.upgrade() { app.set_lmk_status(error.into()); }
