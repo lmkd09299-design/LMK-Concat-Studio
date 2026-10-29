@@ -1,7 +1,7 @@
 """Scriptable interface. Example: python cli.py recap --input movie.mp4 --srt movie.srt --out output"""
 import argparse,json,sys,os
 from core.ai import AISettings
-from core.oxion_keys import is_oxion, load as load_oxion_key, store as save_oxion_key
+from core.oxion_keys import is_oxion, load as load_oxion_key, store as save_oxion_key, verify_model_access
 from core.editor import build_edited_video
 from core.recap import build_recap
 from core.rights import audit_and_transform
@@ -40,10 +40,11 @@ def main():
     key = os.environ.get(a.api_key_env,'')
     try:
         if a.mode == 'recap' and not a.no_ai and is_oxion(a.api_url):
-            if key and a.remember_oxion_key:
-                save_oxion_key(key)
             if not key:
                 key = load_oxion_key()
+            verify_model_access(a.api_url, a.api_model, key)
+            if os.environ.get(a.api_key_env,'') and a.remember_oxion_key:
+                save_oxion_key(key)
         ai=AISettings() if a.no_ai else AISettings(a.api_url,a.api_model,key)
     except MediaError as e:
         print('FAILED:', e, file=sys.stderr)
