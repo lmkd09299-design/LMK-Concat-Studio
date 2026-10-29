@@ -18,6 +18,41 @@ def is_oxion(url: str) -> bool:
     return parts.scheme == "https" and (parts.hostname or "").lower().removeprefix("www.") == "oxionai.com" and parts.path.rstrip("/") in ("/v1", "/v1/chat/completions")
 
 
+def verify_model_access(base_url: str, model: str, key: str, timeout: int = 15) -> None:
+    """Validate Oxion key + chosen model BEFORE a multi-hour movie analysis."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    if not is_oxion(base_url):
+        raise MediaError("URL Oxion không hợp lệ.")
+    if not key.strip():
+        raise MediaError("Chưa có API key Oxion. Nhập key một lần hoặc bật lưu key trên Windows.")
+    if not model.strip():
+        raise MediaError("Chưa chọn Model ID Oxion.")
+    root = base_url.rstrip("/")
+    if root.endswith("/chat/completions"):
+        root = root.rsplit("/chat/completions", 1)[0]
+    url = root + "/models/" + urllib.parse.quote(model, safe="")
+    request = urllib.request.Request(url, headers={"Authorization": "Bearer " + key.strip(),
+                                                    "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.load(response)
+        if data.get("id") != model:
+            raise MediaError("Oxion trả về model ID không trùng cấu hình.")
+    except urllib.error.HTTPError as exc:
+        messages = {
+            401: "API key Oxion không hợp lệ hoặc đã bị thu hồi.",
+            403: "API key Oxion thiếu quyền models:read. Kiểm tra phạm vi key.",
+            404: "Oxion không có model này trong danh sách được phép sử dụng.",
+            429: "Oxion đang giới hạn lượt gọi API. Thử lại sau.",
+        }
+        raise MediaError(messages.get(exc.code, f"Không kiểm tra được Oxion (HTTP {exc.code}).")) from exc
+    except urllib.error.URLError as exc:
+        raise MediaError("Không kết nối được Oxion để kiểm tra model. Kiểm tra mạng và URL.") from exc
+
+
 def _file() -> pathlib.Path:
     home = os.environ.get("LOCALAPPDATA")
     if os.name != "nt" or not home:
