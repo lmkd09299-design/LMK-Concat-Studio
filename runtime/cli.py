@@ -24,6 +24,14 @@ def main():
     p.add_argument('--replacement-audio',default='')
     p.add_argument('--license-note',default='')
     a=p.parse_args()
+    # Select a voice in the recap target language unless CLI explicitly
+    # overrides the voice. UI uses default voice-name, not a voice picker.
+    if a.mode == 'recap' and '--voice-name' not in sys.argv:
+        a.voice_name = {
+            'English': 'en-US-AriaNeural',
+            'Thai': 'th-TH-PremwadeeNeural',
+            'Tiếng Việt': 'vi-VN-HoaiMyNeural',
+        }.get(a.language, a.voice_name)
     ai=AISettings(a.api_url,a.api_model,os.environ.get(a.api_key_env,''))
     try:
         if a.mode=='rights':
