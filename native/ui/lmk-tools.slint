@@ -126,7 +126,7 @@ export component LmkTools inherits Rectangle {
     property <string> analysis-text: "";
     property <string> replacement-path: "";
     property <string> license-note: "";
-    property <bool> use-ai: false;
+    property <bool> use-ai: true;
     property <string> ai-url: "";
     property <string> ai-model: "";
     property <string> ai-key: "";
@@ -168,7 +168,7 @@ export component LmkTools inherits Rectangle {
             VerticalLayout {
                 padding: 12px;
                 spacing: 9px;
-                LmkField {
+                if root.page != 2: LmkField {
                     label: "Video goc (.mp4/.mkv/.mov)";
                     value <=> root.source-path;
                     browse: true;
@@ -176,7 +176,7 @@ export component LmkTools inherits Rectangle {
                         root.source-path = root.browse(1);
                     }
                 }
-                if root.page != 3: LmkField {
+                if root.page == 1: LmkField {
                     label: "Phu de .srt (khong bat buoc)";
                     value <=> root.subtitle-path;
                     browse: true;
@@ -184,12 +184,33 @@ export component LmkTools inherits Rectangle {
                         root.subtitle-path = root.browse(2);
                     }
                 }
-                LmkField {
+                if root.page != 2: LmkField {
                     label: "Thu muc luu ket qua";
                     value <=> root.output-path;
                     browse: true;
                     pick => {
                         root.output-path = root.browse(3);
+                    }
+                }
+                if root.page == 2: VerticalLayout {
+                    spacing: 7px;
+                    Text {
+                        text: "TU DONG 100% SAU KHI CHON VIDEO";
+                        color: Theme.accent;
+                        font-weight: 700;
+                        font-size: Theme.fs;
+                    }
+                    Text {
+                        text: "1. Nhap video vao CONCAT EDITOR o ben trai. Neu co nhieu video, click chon 1 video. 2. Bam TU DONG RECAP. Khong can nhap duong dan hay thu muc.";
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: "Tu tao thu muc ket qua trong project Concat; tu nhan dien thoai, viet script, cat ghep, tao voice va nhap video thanh pham vao kho media.";
+                        color: Theme.fg-dim;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
                     }
                 }
                 if root.page != 3: Text { text: "Ty le khung hinh"; color: Theme.fg-muted; font-size: Theme.fs-sm; }
@@ -202,7 +223,7 @@ export component LmkTools inherits Rectangle {
                 if root.page != 3: Select {
                     options: root.page == 1
                         ? ["Giu nguyen", "Tieng Viet", "English", "Thai"]
-                        : ["Tieng Viet", "English", "Thai"];
+                        : ["English (Concat voice)", "Tieng Viet (Edge voice)", "Thai (Edge voice)"];
                     current: root.language-choice;
                     changed(index) => { root.language-choice = index; }
                 }
@@ -304,7 +325,7 @@ export component LmkTools inherits Rectangle {
                     HorizontalLayout {
                         spacing: 8px;
                         Text {
-                            text: "Bat AI viet kich ban va chon canh";
+                            text: "AI viet kich ban va chon canh";
                             color: Theme.fg;
                             horizontal-stretch: 1;
                         }
@@ -330,7 +351,7 @@ export component LmkTools inherits Rectangle {
                         }
                     }
                     if !root.use-ai: Text {
-                        text: "Chua ket noi AI: dung transcript va thuat toan chon canh. Khong tu hieu noi dung phim.";
+                        text: "Che do fallback: chi chon canh theo phu de/tu khoa, KHONG phai AI viet kich ban.";
                         color: Theme.fg-dim;
                         font-size: Theme.fs-sm;
                         wrap: word-wrap;
@@ -358,7 +379,7 @@ export component LmkTools inherits Rectangle {
                         wrap: word-wrap;
                     }
                 }
-                if root.page != 3: HorizontalLayout {
+                if root.page == 1: HorizontalLayout {
                     spacing: 8px;
                     Text { text: "Tao giong doc / long tieng"; color: Theme.fg; horizontal-stretch: 1; }
                     Switch { checked: root.dubbing; toggled(on) => { root.dubbing = on; } }
@@ -374,8 +395,8 @@ export component LmkTools inherits Rectangle {
                     block: true;
                     primary: true;
                     large: true;
-                    label: root.busy ? "DANG XU LY..." : (root.page == 1 ? "XUAT VIDEO" : (root.page == 2 ? "TAO MOVIE RECAP" : "RA SOAT / XUAT VIDEO"));
-                    enabled: !root.busy && root.source-path != "" && root.output-path != "";
+                    label: root.busy ? "DANG XU LY..." : (root.page == 1 ? "XUAT VIDEO" : (root.page == 2 ? "TU DONG RECAP" : "RA SOAT / XUAT VIDEO"));
+                    enabled: !root.busy && (root.page == 2 || (root.source-path != "" && root.output-path != ""));
                     clicked => {
                         root.run-job({
                             mode: root.page,
@@ -385,9 +406,9 @@ export component LmkTools inherits Rectangle {
                             aspect: root.aspect-choice == 0 ? "9:16" : (root.aspect-choice == 1 ? "16:9" : "1:1"),
                             language: root.page == 1
                                 ? (root.language-choice == 0 ? "Giữ nguyên" : (root.language-choice == 1 ? "Tiếng Việt" : (root.language-choice == 2 ? "English" : "Thai")))
-                                : (root.language-choice == 0 ? "Tiếng Việt" : (root.language-choice == 1 ? "English" : "Thai")),
+                                : (root.language-choice == 0 ? "English" : (root.language-choice == 1 ? "Tiếng Việt" : "Thai")),
                             rights: root.rights-choice == 0 ? "Chưa xác minh" : (root.rights-choice == 1 ? "Tự quay / tự sở hữu" : (root.rights-choice == 2 ? "Được cấp phép" : "Public domain / CC phù hợp")),
-                            voice: root.dubbing,
+                            voice: root.page == 2 ? true : root.dubbing,
                             burn: root.burn-subs,
                             mute: root.mute-original,
                             minutes: root.minutes-choice == 0 ? 1 : (root.minutes-choice == 1 ? 3 : (root.minutes-choice == 2 ? 5 : (root.minutes-choice == 3 ? 8 : 10))),
