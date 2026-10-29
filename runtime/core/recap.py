@@ -89,6 +89,10 @@ def save_plan(selected:list[dict], outdir:Path, summary:str,source:str,target:in
     outdir.mkdir(parents=True,exist_ok=True)
     (outdir/'kich_ban.txt').write_text(summary+'\n\n--- LỜI BÌNH THEO CẢNH ---\n'+
       '\n'.join(f"[{x['start']:.1f}s-{x['end']:.1f}s] {x['narration']}" for x in selected),encoding='utf-8-sig')
+    # Plain commentary script used directly by Concat's Kokoro/Pocket TTS.
+    # No subtitles/timecodes in the speech input.
+    narration = ' '.join(x['narration'].strip() for x in selected if x['narration'].strip())
+    (outdir/'voice_script.txt').write_text(narration, encoding='utf-8')
     (outdir/'scene_plan.json').write_text(json.dumps({'source':source,'requested_seconds':target,
        'ai_generated':ai_generated,'segments':selected},ensure_ascii=False,indent=2),encoding='utf-8')
     with (outdir/'canh_chon.csv').open('w',newline='',encoding='utf-8-sig') as f:
