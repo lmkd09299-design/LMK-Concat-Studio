@@ -263,7 +263,7 @@ impl Job {
             cmd.env("LMK_AI_KEY", &self.ai_key);
         }
         let result = cmd
-            .current_dir(runtime)
+            .current_dir(&runtime)
             .stdin(Stdio::null())
             .output()
             .map_err(|e| format!("Could not start Python {}: {e}", python.display()))?;
@@ -281,14 +281,12 @@ impl Job {
             let text = std::fs::read_to_string(&script)
                 .map_err(|e| format!("Cannot read AI narration script: {e}"))?;
             let wav = speak_with_concat(&ctx, &text)?;
-             let result = Command::new(&python)
-                .args([
-                    runtime.join("cli.py").to_string_lossy().as_ref(),
-                    "mix",
-                    "--input", self.output.join("recap_video.mp4").to_string_lossy().as_ref(),
-                    "--out", self.output.to_string_lossy().as_ref(),
-                    "--voice-file", wav.to_string_lossy().as_ref(),
-                ])
+            let result = Command::new(&python)
+                .arg(runtime.join("cli.py"))
+                .arg("mix")
+                .arg("--input").arg(self.output.join("recap_video.mp4"))
+                .arg("--out").arg(&self.output)
+                .arg("--voice-file").arg(&wav)
                 .current_dir(&runtime)
                 .stdin(Stdio::null())
                 .output()
