@@ -18,8 +18,13 @@ def is_oxion(url: str) -> bool:
     return parts.scheme == "https" and (parts.hostname or "").lower().removeprefix("www.") == "oxionai.com" and parts.path.rstrip("/") in ("/v1", "/v1/chat/completions")
 
 
-def verify_model_access(base_url: str, model: str, key: str, timeout: int = 15) -> None:
-    """Validate Oxion key + chosen model BEFORE a multi-hour movie analysis."""
+def verify_model_access(base_url: str, model: str, key: str, timeout: int = 15) -> bool:
+    """Return True if model metadata was verified, False if key is inference-only.
+
+    Oxion separates GET /models (models:read) from POST /chat/completions
+    (inference). Missing models:read must not block an inference-only key.
+    False does not certify key/model validity; the actual chat request does.
+    """
     import json
     import urllib.error
     import urllib.request
@@ -41,10 +46,20 @@ def verify_model_access(base_url: str, model: str, key: str, timeout: int = 15) 
             data = json.load(response)
         if data.get("id") != model:
             raise MediaError("Oxion trả về model ID không trùng cấu hình.")
+        return True
     except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            # Only allow the documented narrow-scope error from the models
+            # endpoint. Other 403 errors can mean a blocked account, etc.
+            try:
+                error = json.loads(exc.read(8192)).get("error", {})
+            except (ValueError, AttributeError, TypeError):
+                error = {}
+            if isinstance(error, dict) and error.get("code") == "insufficient_scope":
+                return False  # Continue; chat/completions checks inference.
         messages = {
             401: "API key Oxion không hợp lệ hoặc đã bị thu hồi.",
-            403: "API key Oxion thiếu quyền models:read. Kiểm tra phạm vi key.",
+            403: "Oxion từ chối quyền truy cập (403) ngoài trường hợp thiếu models:read. Kiểm tra tài khoản và key.",
             404: "Oxion không có model này trong danh sách được phép sử dụng.",
             429: "Oxion đang giới hạn lượt gọi API. Thử lại sau.",
         }
