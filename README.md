@@ -96,3 +96,17 @@ Bản v4 hiện có đã build xanh và không bị sửa. Chỉ dùng v5 sau kh
 - Even when automated, visual plot understanding remains limited to video scene boundaries and transcript. The tool cannot independently certify publishing rights for the source movie or music.
 
 **Testing status:** implementation pushed to PR #1, awaiting completed Windows Rust/Slint build and smoke test. Do not download pre-release source as a functioning v6 installer until CI passes.
+
+
+## Oxion AI preset — v6.1
+
+Movie Recap AI defaults to Oxion's documented OpenAI-compatible API. The preset is only a configuration value, **not** a claim that an Oxion account/API key has been tested or that a particular model is included in a subscription.
+
+- API URL: `https://www.oxionai.com/v1`
+- Suggested model ID: `deepseek-v4-flash-0731` (copy the exact ID from Oxion's `GET /v1/models` if it changes).
+- API key: paste a **new private key** in the UI; never put it in GitHub, .env tracked by Git, video subtitles or logs.
+- Optional toggle: **Nhớ key trên Windows (mã hóa DPAPI)**. The key is passed via the worker's environment, not a command-line argument. Python uses Windows CryptProtectData and stores the encrypted blob in `%LOCALAPPDATA%\\LMK-Concat-Studio\\oxion.dpapi`. Future Movie Recap runs automatically load that key if the input is empty. Unticking the toggle stops new saves; to explicitly revoke stored local access, delete the `oxion.dpapi` file. Windows user DPAPI protects only at-rest secret storage, not an already compromised unlocked Windows account.
+- To rotate key: enter a new key and enable the remember toggle for one run; it overwrites the old encrypted key file. Revoke the old key in Oxion Dashboard → API Keys.
+- Requires your Oxion API key to have `inference` scope and your model selection to match an available model. Network/API billing depends on Oxion's actual terms and usage limits. Voice generation and video rendering still run in Concat/FFmpeg.
+- Oxion receives screenplay/transcript excerpts for AI analysis, not the original video file in this text-only integration. Video frames are **not** interpreted by Oxion vision in this version.
+- Reference: https://www.oxionai.com/docs/getting-started and https://www.oxionai.com/docs/models.

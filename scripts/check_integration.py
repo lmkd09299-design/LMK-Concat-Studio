@@ -19,7 +19,13 @@ def check(path: Path | None):
     assert '"rights".into()' in rust
     assert 'callback browse(kind: int) -> string;' in ui
     assert 'root.browse(1)' in ui
-    assert 'AI Model ID' in ui
+    assert 'Oxion Model ID' in ui
+    assert 'https://www.oxionai.com/v1' in ui
+    assert 'remember_oxion_key:' in ui
+    assert 'remember_oxion_key:' in rust
+    assert 'remember-oxion-key' in rust
+    assert 'remember-oxion-key' in (ROOT / 'runtime/cli.py').read_text(encoding='utf-8')
+    assert 'CryptProtectData' in (ROOT / 'runtime/core/oxion_keys.py').read_text(encoding='utf-8')
     assert 'app.on_lmk_pick' in rust
     assert 'LMK_AI_KEY' in rust
     assert 'recap_source_from_project' in rust

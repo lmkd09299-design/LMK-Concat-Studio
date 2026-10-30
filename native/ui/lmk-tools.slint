@@ -26,6 +26,7 @@ export struct LmkRequest {
     ai_key: string,
     asr_model: string,
     use_ai: bool,
+    remember_oxion_key: bool,
 }
 
 export component LmkField inherits Rectangle {
@@ -127,9 +128,10 @@ export component LmkTools inherits Rectangle {
     property <string> replacement-path: "";
     property <string> license-note: "";
     property <bool> use-ai: true;
-    property <string> ai-url: "";
-    property <string> ai-model: "";
+    property <string> ai-url: "https://www.oxionai.com/v1";
+    property <string> ai-model: "deepseek-v4-flash-0731";
     property <string> ai-key: "";
+    property <bool> remember-oxion-key: false;
     property <int> asr-choice: 0;
     property <int> aspect-choice: 0;
     property <int> language-choice: 0;
@@ -337,17 +339,35 @@ export component LmkTools inherits Rectangle {
                     if root.use-ai: VerticalLayout {
                         spacing: 6px;
                         LmkField {
-                            label: "API URL OpenAI-compatible (HTTPS)";
+                            label: "Oxion AI - API URL (co the doi provider)";
                             value <=> root.ai-url;
                         }
                         LmkField {
-                            label: "AI Model ID";
+                            label: "Oxion Model ID (lay tu /v1/models)";
                             value <=> root.ai-model;
                         }
                         LmkField {
-                            label: "API key - chi dung trong phien";
+                            label: "Oxion API key (de trong neu da luu)";
                             value <=> root.ai-key;
                             secret: true;
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Nho key tren Windows (ma hoa DPAPI)";
+                                color: Theme.fg;
+                                horizontal-stretch: 1;
+                            }
+                            Switch {
+                                checked: root.remember-oxion-key;
+                                toggled(on) => { root.remember-oxion-key = on; }
+                            }
+                        }
+                        Text {
+                            text: "Key luu ma hoa chi doc duoc boi tai khoan Windows nay; khong tai len GitHub.";
+                            color: Theme.fg-dim;
+                            font-size: Theme.fs-sm;
+                            wrap: word-wrap;
                         }
                     }
                     if !root.use-ai: Text {
@@ -416,6 +436,7 @@ export component LmkTools inherits Rectangle {
                             replacement_audio: root.page == 3 ? root.replacement-path : "",
                             license_note: root.page == 3 ? root.license-note : "",
                             use_ai: root.page == 2 && root.use-ai,
+                            remember_oxion_key: root.page == 2 && root.remember-oxion-key,
                             ai_url: root.page == 2 && root.use-ai ? root.ai-url : "",
                             ai_model: root.page == 2 && root.use-ai ? root.ai-model : "",
                             ai_key: root.page == 2 && root.use-ai ? root.ai-key : "",

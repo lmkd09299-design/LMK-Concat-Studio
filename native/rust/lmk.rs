@@ -31,6 +31,7 @@ struct Job {
     replacement_audio: Option<PathBuf>,
     license_note: String,
     use_ai: bool,
+    remember_oxion_key: bool,
     ai_url: String,
     ai_model: String,
     ai_key: String,
@@ -226,6 +227,9 @@ impl Job {
             }
         } else if self.mode == 2 {
             if self.use_ai {
+                if self.remember_oxion_key {
+                    args.push("--remember-oxion-key".into());
+                }
                 if !self.ai_url.is_empty() {
                     args.extend(["--api-url".into(), self.ai_url.clone()]);
                 }
@@ -338,6 +342,7 @@ pub fn bind(app: &App) {
                 .then(|| PathBuf::from(form.replacement_audio.trim())),
             license_note: form.license_note.to_string(),
             use_ai: form.use_ai,
+            remember_oxion_key: form.remember_oxion_key,
             ai_url: form.ai_url.to_string(),
             ai_model: form.ai_model.to_string(),
             ai_key: form.ai_key.to_string(),
