@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.oxion_keys import is_oxion, store, load, clear, verify_model_access
+from core.oxion_keys import is_oxion, store, load, clear, verify_model_access, verify_inference_access
 from core.media import MediaError
 
 
@@ -80,6 +80,50 @@ class OxionTests(unittest.TestCase):
     def test_missing_key_is_rejected_before_network(self):
         with self.assertRaises(MediaError):
             verify_model_access("https://www.oxionai.com/v1", "deepseek-v4-flash-0731", "")
+
+    def test_inference_probe_uses_chat_not_models(self):
+        import io
+        import json
+
+        class Response(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+
+        def fake(req, timeout):
+            self.assertEqual(req.full_url, "https://www.oxionai.com/v1/chat/completions")
+            self.assertEqual(req.get_method(), "POST")
+            self.assertEqual(req.get_header("Authorization"), "Bearer cc_mock_inference")
+            body = json.loads(req.data)
+            self.assertEqual(body["model"], "deepseek-v4-flash-0731")
+            self.assertLessEqual(body["max_tokens"], 24)
+            self.assertNotIn("transcript", str(body).lower())
+            return Response(b'{"choices":[{"message":{"content":"OK"}}]}')
+
+        with patch("urllib.request.urlopen", side_effect=fake):
+            verify_inference_access("https://www.oxionai.com/v1",
+                                   "deepseek-v4-flash-0731", "cc_mock_inference")
+
+    def test_inference_scope_403_is_reported(self):
+        import io
+        from urllib.error import HTTPError
+        failure = HTTPError("https://www.oxionai.com/v1/chat/completions",
+                            403, "Forbidden", {}, io.BytesIO(b'{}'))
+        with patch("urllib.request.urlopen", side_effect=failure):
+            with self.assertRaisesRegex(MediaError, "inference"):
+                verify_inference_access("https://www.oxionai.com/v1", "test-model", "cc_dummy")
+
+    def test_inference_insufficient_funds_402_is_reported(self):
+        import io
+        from urllib.error import HTTPError
+        failure = HTTPError("https://www.oxionai.com/v1/chat/completions",
+                            402, "Payment Required", {}, io.BytesIO(b'{}'))
+        with patch("urllib.request.urlopen", side_effect=failure):
+            with self.assertRaisesRegex(MediaError, "402"):
+                verify_inference_access("https://www.oxionai.com/v1", "test-model", "cc_dummy")
+
+    def test_inference_bad_key_blocks_before_processing(self):
+        with self.assertRaises(MediaError):
+            verify_inference_access("https://www.oxionai.com/v1", "test-model", "")
 
     def test_empty_key_refused(self):
         with self.assertRaises(MediaError):
