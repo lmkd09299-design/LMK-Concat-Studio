@@ -38,6 +38,45 @@ class OxionTests(unittest.TestCase):
         with patch("urllib.request.urlopen", fake_urlopen):
             verify_model_access("https://www.oxionai.com/v1", "deepseek-v4-flash-0731", "cc_test_only")
 
+    def test_inference_only_key_can_skip_models_read(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+
+        response = json.dumps({
+            "error": {"code": "insufficient_scope", "message": "models:read required"}
+        }).encode("utf-8")
+        failure = HTTPError("https://www.oxionai.com/v1/models/test-model",
+                            403, "Forbidden", {}, io.BytesIO(response))
+        with patch("urllib.request.urlopen", side_effect=failure):
+            self.assertFalse(verify_model_access(
+                "https://www.oxionai.com/v1", "test-model", "cc_inference_only"))
+
+    def test_other_forbidden_models_error_stays_blocking(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+
+        response = json.dumps({
+            "error": {"code": "account_suspended", "message": "Blocked"}
+        }).encode("utf-8")
+        failure = HTTPError("https://www.oxionai.com/v1/models/test-model",
+                            403, "Forbidden", {}, io.BytesIO(response))
+        with patch("urllib.request.urlopen", side_effect=failure):
+            with self.assertRaises(MediaError):
+                verify_model_access("https://www.oxionai.com/v1",
+                                    "test-model", "cc_account_blocked")
+
+    def test_bad_key_still_rejected(self):
+        import io
+        from urllib.error import HTTPError
+        failure = HTTPError("https://www.oxionai.com/v1/models/test-model",
+                            401, "Unauthorized", {}, io.BytesIO(b'{}'))
+        with patch("urllib.request.urlopen", side_effect=failure):
+            with self.assertRaisesRegex(MediaError, "không hợp lệ"):
+                verify_model_access("https://www.oxionai.com/v1",
+                                    "test-model", "cc_bad_key")
+
     def test_missing_key_is_rejected_before_network(self):
         with self.assertRaises(MediaError):
             verify_model_access("https://www.oxionai.com/v1", "deepseek-v4-flash-0731", "")
