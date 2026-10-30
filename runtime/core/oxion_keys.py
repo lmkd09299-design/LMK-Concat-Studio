@@ -68,6 +68,59 @@ def verify_model_access(base_url: str, model: str, key: str, timeout: int = 15) 
         raise MediaError("Không kết nối được Oxion để kiểm tra model. Kiểm tra mạng và URL.") from exc
 
 
+
+def verify_inference_access(base_url: str, model: str, key: str, timeout: int = 45) -> None:
+    """Probe the permission actually needed by Movie Recap: inference.
+
+    Unlike GET /models, a tiny POST /chat/completions needs only 'inference'.
+    Oxion bills the token usage for this probe. No source video or transcript
+    leaves the machine during this check.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    if not is_oxion(base_url):
+        raise MediaError("URL API Oxion không hợp lệ.")
+    if not key or not key.strip():
+        raise MediaError("Chưa nhập Oxion API key. Hãy nhập key mới trên máy Windows.")
+    if not model or not model.strip():
+        raise MediaError("Chưa chọn Oxion Model ID.")
+    root = base_url.strip().rstrip("/")
+    if root.endswith("/chat/completions"):
+        root = root[:-len("/chat/completions")]
+    url = root + "/chat/completions"
+    payload = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": "Say OK."}],
+        "max_tokens": 24
+    }).encode("utf-8")
+    headers = {
+        "Authorization": "Bearer " + key.strip(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    request = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = json.load(response)
+        if not isinstance(body, dict) or not isinstance(body.get("choices"), list) or not body["choices"]:
+            raise MediaError("Oxion trả phản hồi AI sai định dạng dù HTTP thành công.")
+    except urllib.error.HTTPError as exc:
+        messages = {
+            400: "Oxion từ chối yêu cầu thử AI (400). Kiểm tra model và tham số.",
+            401: "Oxion API key không hợp lệ hoặc đã bị thu hồi (401).",
+            402: "Oxion không còn hạn mức API hoặc số dư để chạy model (402).",
+            403: "Oxion từ chối quyền inference (403). Cần key có quyền inference.",
+            404: "Oxion không tìm thấy Model ID đang chọn (404).",
+            422: "Oxion từ chối cấu trúc yêu cầu API (422).",
+            429: "Oxion đang giới hạn tốc độ API (429).",
+        }
+        raise MediaError(messages.get(exc.code, f"Oxion báo HTTP {exc.code} khi gọi inference.")) from exc
+    except urllib.error.URLError as exc:
+        raise MediaError("Không kết nối được endpoint chat/completions Oxion. Kiểm tra mạng.") from exc
+
+
 def _file() -> pathlib.Path:
     home = os.environ.get("LOCALAPPDATA")
     if os.name != "nt" or not home:
